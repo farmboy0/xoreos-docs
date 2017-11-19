@@ -33,6 +33,7 @@
 //		Orange       : skin node without node header
 //		Red          : animation data node without node header
 //		Gray         : mesh node without node header
+//		Dark Blue    : AABB node without node header
 //--------------------------------------
 
 //------------------------------------------------------
@@ -236,12 +237,15 @@ typedef struct {
 /*
 	dcl_position v0
 	dcl_normal v3
+	dcl_color v3
 	dcl_texcoord v4
 	dcl_color v5
 	dcl_texcoord v7
 	dcl_texcoord v8
 	dcl_texcoord v9
 	dcl_texcoord v10
+	dcl_texcoord v11
+	dcl_texcoord v12
 	dcl_tangent v11
 	dcl_tangent v12
 	dcl_tangent v13
@@ -252,13 +256,13 @@ typedef struct {
 	uint32 has_UV2 : 1;
 	uint32 has_UV3 : 1;
 	uint32 has_UV4 : 1;
-	uint32 has_texcoord4 : 1;
-	uint32 has_color : 1;
+	uint32 has_alpha : 1;
+	uint32 has_diffuse : 1;
 	uint32 has_tangent : 1;
 	uint32 has_offset4 : 1;
 	uint32 has_offset5 : 1;
 	uint32 has_offset6 : 1;
-	uint32 has_4bytes3 : 1;
+	uint32 has_color : 1;
 } vertex_struct_flags;
 
 typedef struct {
@@ -281,8 +285,8 @@ typedef struct {
 	uint32 mdx_vertex_struct_size;
 	vertex_struct_flags flags;
 	int32 mdx_vertex_struct_offset_vertex;
-	int32 mdx_vertex_struct_offset_texcoord4;
-	int32 mdx_vertex_struct_offset_color;
+	int32 mdx_vertex_struct_offset_alpha;
+	int32 mdx_vertex_struct_offset_diffuse;
 	int32 mdx_vertex_struct_offset_UV1;
 	int32 mdx_vertex_struct_offset_UV2;
 	int32 mdx_vertex_struct_offset_UV3;
@@ -291,7 +295,7 @@ typedef struct {
 	int32 mdx_vertex_struct_offset4;
 	int32 mdx_vertex_struct_offset5;
 	int32 mdx_vertex_struct_offset6;
-	int32 mdx_vertex_struct_offset_4bytes3;
+	int32 mdx_vertex_struct_offset_color;
 	ushort mdx_vertex_struct_count;
 	ushort count_texture;
 	uint32 mdx_offset_vertex_struct <format=hex>;
@@ -346,6 +350,12 @@ typedef struct(node &n) {
 		vertex v[n.skin.bone_vertex.nr_used_entries] <fgcolor=cBlack>;
 	}
 } data_skin <bgcolor=0x0090FF>;
+
+typedef struct {
+	uint32 p_1 <format=hex, read=ReadPointer>;
+	uint32 p_2 <format=hex, read=ReadPointer>;
+	uint32 p_3 <format=hex, read=ReadPointer>;
+} header_u800 <bgcolor=cLtBlue>;
 
 typedef struct {
 	ushort unknown1;
@@ -543,6 +553,9 @@ typedef struct {
 	if (header.content.has_skin) {
 		header_skin skin;
 	}
+	if (header.content.has_unknown800) {
+		header_u800 u800;
+	}
 	if (header.content.has_aabb) {
 		header_aabb aabb;
 	}
@@ -550,7 +563,7 @@ typedef struct {
 		header_gob gob;
 	}
 	if (header.content.has_dangly_bone) {
-		header_dabo dabo;
+		//header_dabo dabo;
 	}
 	if (header.content.has_controllers) {
 		header_controller controllers;
@@ -589,22 +602,22 @@ typedef struct {
 // animation structures
 
 typedef struct {
-	float length;
+	float start;
 	char name[32];
-	uint32 u1;
+	uint32 sound_id;
 } event <read=ReadEvent>;
 
 typedef struct(int nr_of_events) {
-    local int e;
-    for (e = 0; e < nr_of_events; e++) {
-    	event ev;
-    }
+	local int e;
+	for (e = 0; e < nr_of_events; e++) {
+		event ev;
+	}
 } event_array;
 
 typedef struct {
 	header_geometry geometry;
 	float length;
-	float transistion;
+	float transition;
 	byte bool1;
 	byte bool2;
 	char name[32];
@@ -669,7 +682,6 @@ string ReadPointer(uint32 &p) {
 	SPrintf(s, "%Xh", v);
 	return s;
 }
-
 
 string ReadArrayDef( array_definition &a ) {
 	string s;
@@ -752,7 +764,7 @@ string ReadNode( node &n ) {
 
 string ReadEvent(event &e) {
 	local string s;
-	SPrintf(s, "%s(%f)", e.name, e.length);
+	SPrintf(s, "%s(%f)", e.name, e.start);
 	return s;
 }
 
