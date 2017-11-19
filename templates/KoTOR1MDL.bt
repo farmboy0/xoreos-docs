@@ -1,0 +1,896 @@
+//------------------------------------------------------
+//--- 010 Editor v6.0.2 Binary Template
+//
+// File: KoTOR1MDL.bt
+// Author: Enrico Horn (Farmboy0)
+// Revision: 0.8
+// Purpose: to map the model format of the kotor1 engine from bioware
+//
+// To the extent possible under law, the authors have dedicated all copyright
+// and related and neighboring rights to this document to the public domain
+// worldwide. This document is distributed without any warranty.
+//
+// You should have received a copy of the CC0 Public Domain Dedication along
+// with this document.
+// If not, see <https://creativecommons.org/publicdomain/zero/1.0/>.
+//
+//------------------------------------------------------
+// Colors:
+//------------------------------------------------------
+//		Dark Red     : array of file pointers(not the array definition)
+//		Black        : array of strings(node names)
+//		Red          : controller keys
+//		Light Red    : controller data
+
+//		Light Blue   : file header
+//		Light Purple : geometry header
+
+//		Aqua         : model header without geometry header
+//		Dark Aqua    : animation header without geometry header incl. events array
+
+//		Light Green  : node header
+//		Yellow       : light node without node header
+//		Dark Yellow  : emitter node without node header
+//		0xA000A0     : reference node without node header
+//		Gray         : mesh node without node header
+//		Orange       : skin node without node header
+//		0x909000     : dangly node without node header
+//		Dark Blue    : AABB node without node header
+//		0xFF0040     : saber node without node header
+//------------------------------------------------------
+
+//------------------------------------------------------
+// generic structures
+
+typedef struct {
+	string s <bgcolor=cBlack, fgcolor=cWhite>;
+} strings <read=ReadStrings>;
+
+typedef struct {
+	float x;
+	float y;
+	float z;
+} vertex <read=ReadVertex>;
+
+typedef struct {
+	float r;
+	float g;
+	float b;
+} color <read=ReadColor>;
+
+typedef struct {
+	ubyte r;
+	ubyte g;
+	ubyte b;
+	ubyte a;
+} rgba <read=ReadRGBA>;
+
+typedef struct {
+	float w;
+	float x;
+	float y;
+	float z;
+} quaternion <read=ReadQuaternion>;
+
+typedef struct {
+	uint32 p_array_start <format=hex,read=ReadPointer>;
+	uint32 nr_used_entries;
+	uint32 nr_alloc_entries;
+} array_definition <read=ReadArrayDef>;
+
+typedef struct {
+	array_definition def;
+	if (def.nr_used_entries > 0) {
+		local int pos = FTell();
+
+		GoToPointer(def.p_array_start);
+		uint32 p_index[def.nr_used_entries] <format=hex,optimize=false,fgcolor=cWhite,bgcolor=cDkRed,read=ReadPointer>;
+
+		FSeek(pos);
+	}
+} array;
+
+typedef struct {
+	array array_info;
+
+	local int pos = FTell();
+
+	local int i;
+	for (i = 0; i < array_info.def.nr_used_entries; i++) {
+		GoToPointer(array_info.p_index[i]);
+		strings str;
+	}
+
+	FSeek(pos);
+} string_array;
+
+//------------------------------------------------------
+// generic header structures
+
+typedef struct {
+	uint32 bin_mdl_id <format=hex>;
+	uint32 mdl_length;
+	uint32 mdx_length;
+} header_file <bgcolor=cLtBlue>;
+
+void GoToPointer(uint32 p) {
+	FSeek(sizeof(header_file) + p);
+}
+
+typedef struct {
+	uint32 p_func1 <format=hex>;
+	uint32 p_func2 <format=hex>;
+	char model_name[32];
+	uint32 p_node_header <format=hex,read=ReadPointer>;
+	uint32 count_nodes;
+	array_definition unknown1;
+	array_definition unknown2;
+	uint32 ref_count;
+	ubyte type;
+	ubyte padding[3];
+} header_geometry <bgcolor=cLtPurple,fgcolor=cBlack>;
+
+typedef struct {
+	ubyte effect     : 1; // 1
+	ubyte tile       : 1; // 2
+	ubyte character  : 1; // 4
+	ubyte door       : 1; // 8
+	ubyte lightsaber : 1; // 10
+	ubyte placeable  : 1; // 20
+	ubyte flyer      : 1; // 40
+} model_type;
+
+typedef struct {
+	header_geometry geometry;
+	model_type type;
+	ubyte always1[3];
+	uint32 count_child_model;
+	array animations;
+	uint32 p_supermodel <format=hex>;
+	float boundingbox_min[3];
+	float boundingbox_max[3];
+	float model_radius;
+	float scale;
+	char supermodel_name[32];
+	uint32 p_node1 <format=hex,read=ReadPointer>;
+	uint32 field_B0;
+	uint32 mdx_length;
+	uint32 p_mdx <format=hex>;
+	string_array names;
+} header_model <bgcolor=cAqua>;
+
+//------------------------------------------------------
+// general node structures
+
+enum controller_type_all {
+	position=8,
+	orientation=20,
+	scale=36
+};
+enum controller_type_light {
+	light_position=8,
+	light_orientation=20,
+	light_scale=36,
+	light_color=76,
+	light_radius=88,
+	light_radius_shadow=96,
+	light_vert_displacement=100,
+	light_multiplier=140
+};
+enum controller_type_emitter {
+	emitter_position=8,
+	emitter_orientation=20,
+	emitter_scale=36,
+	emitter_alpha_end=80,
+	emitter_alpha_start=84,
+	emitter_birthrate=88,
+	emitter_bounce_co=92,
+	emitter_combine_time=96,
+	emitter_drag=100,
+	emitter_fps=104,
+	emitter_frame_end=108,
+	emitter_frame_start=112,
+	emitter_grav=116,
+	emitter_life_exp=120,
+	emitter_mass=124,
+	emitter_p2p_bezier2=128,
+	emitter_p2p_bezier3=132,
+	emitter_particle_rot=136,
+	emitter_rand_vel=140,
+	emitter_size_start=144,
+	emitter_size_end=148,
+	emitter_size_start_y=152,
+	emitter_size_end_y=156,
+	emitter_spread=160,
+	emitter_threshold=164,
+	emitter_velocity=168,
+	emitter_size_x=172,
+	emitter_size_y=176,
+	emitter_blur_length=180,
+	emitter_lightning_delay=184,
+	emitter_lightning_radius=188,
+	emitter_lightning_scale=192,
+	emitter_detonate=228,
+	emitter_color_end=380,
+	emitter_color_start=392,
+	emitter_alpha_mid=464,
+	emitter_color_mid=468,
+	emitter_percent_start=480,
+	emitter_percent_mid=481,
+	emitter_percent_end=482,
+	emitter_size_mid=484,
+	emitter_size_mid_y=488
+};
+enum controller_type_mesh {
+	mesh_position=8,
+	mesh_orientation=20,
+	mesh_scale=36,
+	mesh_self_illum_color=100,
+	mesh_alpha=128,
+	mesh_unknown=132
+};
+
+typedef struct {
+	short has_header     : 1; // 1
+	short has_light      : 1; // 2
+	short has_emitter    : 1; // 4
+	short has_camera     : 1; // 8
+	short has_reference  : 1; // 10
+	short has_mesh       : 1; // 20
+	short has_skin       : 1; // 40
+	short has_anim       : 1; // 80
+	short has_dangly     : 1; // 100
+	short has_aabb       : 1; // 200
+	short has_unknown400 : 1; // 400
+	short has_unknown800 : 1; // 800
+} content_node;
+
+typedef struct(content_node &c) {
+	if (c.has_light) {
+		controller_type_light type;
+	} else if (c.has_mesh) {
+		controller_type_mesh type;
+	} else if (c.has_emitter) {
+		controller_type_emitter type;
+	} else {
+		controller_type_all type;
+	}
+	short unknown1;
+	ushort count_rows;
+	ushort start_timekey;
+	ushort start_data_columns;
+	byte count_data_columns;
+	byte padding[3];
+} controller <bgcolor=cRed,read=ReadController>;
+
+typedef struct {
+	content_node content;
+	short node_number;
+	short node_name_index;
+	short unknown;
+	uint32 p_root_node <format=hex,read=ReadPointer>;
+	uint32 p_parent_node <format=hex,read=ReadPointer>;
+	float position[3];
+	float orientation[4];
+	array children;
+	array_definition controllers_keys;
+	array_definition controllers_data;
+} header_node <bgcolor=cLtGreen,fgcolor=cBlack>;
+
+//------------------------------------------------------
+// specific node structures
+
+// forward declaration of the node struct
+struct node;
+
+//------------------------------------------------------
+// light node
+
+typedef struct {
+	float flare_radius;
+	array_definition unknown;
+	array_definition flare_sizes;
+	array_definition flare_positions;
+	array_definition flare_color_shifts;
+	array_definition flare_textures;
+	uint32 light_priority;
+	uint32 ambient_only;
+	uint32 dynamic_type;
+	uint32 affect_dynamic;
+	uint32 shadow;
+	uint32 generate_flare;
+	uint32 fading;
+} header_light <bgcolor=cYellow>;
+
+typedef struct {
+	string name;
+} texture_name <fgcolor=cLtRed>;
+
+typedef struct(node &n) {
+	if (n.light.flare_textures.nr_used_entries > 0) {
+		GoToPointer(n.light.flare_textures.p_array_start);
+		uint32 p_texture[n.light.flare_textures.nr_used_entries] <format=hex,optimize=false,fgcolor=cWhite,bgcolor=cDkRed,read=ReadPointer>;
+
+		local int i;
+		for (i = 0; i < n.light.flare_textures.nr_used_entries; i++) {
+			GoToPointer(p_texture[i]);
+			texture_name texture;
+		}
+	}
+	if (n.light.flare_sizes.nr_used_entries > 0) {
+		GoToPointer(n.light.flare_sizes.p_array_start);
+		float flare_size[n.light.flare_sizes.nr_used_entries] <fgcolor=cAqua>;
+	}
+	if (n.light.flare_positions.nr_used_entries > 0) {
+		GoToPointer(n.light.flare_positions.p_array_start);
+		float flare_position[n.light.flare_positions.nr_used_entries] <fgcolor=0x0090FF>;
+	}
+	if (n.light.flare_color_shifts.nr_used_entries > 0) {
+		GoToPointer(n.light.flare_color_shifts.p_array_start);
+		float flare_color_shift[3*n.light.flare_color_shifts.nr_used_entries] <fgcolor=cLtBlue>;
+	}
+} data_light <bgcolor=cYellow>;
+
+//------------------------------------------------------
+// emitter node
+
+typedef struct {
+	uint32 flag_p2p           : 1; // 1
+	uint32 flag_p2p_sel       : 1; // 2
+	uint32 flag_affected_wind : 1; // 4
+	uint32 flag_tinted        : 1; // 8
+	uint32 flag_bounce        : 1; // 10
+	uint32 flag_random        : 1; // 20
+	uint32 flag_inherit       : 1; // 40
+	uint32 flag_inherit_vel   : 1; // 80
+	uint32 flag_inherit_local : 1; // 100
+	uint32 flag_splat         : 1; // 200
+	uint32 flag_inherit_part  : 1; // 400
+} emitter_flags;
+
+typedef struct {
+	uint32 zero1;
+	uint32 zero2;
+	float dead_space;
+	float blast_radius;
+	float blast_length;
+	uint32 grid_x;
+	uint32 grid_y;
+	uint32 space;
+	char update[32];
+	char render[32];
+	char blend[32];
+	char texture[64];
+	char chunk[16];
+	uint32 texture_is_2sided;
+	uint32 loop;
+	uint16 render_order;
+	uint16 padding;
+	emitter_flags flags;
+} header_emitter <bgcolor=cDkYellow>;
+
+//------------------------------------------------------
+// reference node
+
+typedef struct {
+	char referenced_model_name[32];
+	uint32 reattachable;
+} header_reference <bgcolor=0xA000A0>;
+
+//------------------------------------------------------
+// mesh node
+
+enum mesh_type {
+	point_list=0,
+	line_list,
+	line_strip,
+	triangle_list,
+	triangle_strip,
+	triangle_fan,
+	unknown
+};
+
+typedef struct {
+	vertex normal;          // unused?
+	float distance;         // unused?
+	int32 surface_id;       // always 1?
+	ushort adj_face_ids[3]; // unused?
+	ushort vertex_id[3];
+} face;
+
+typedef struct {
+	uint32 has_vertex  : 1; // 1
+	uint32 has_UV1     : 1; // 2
+	uint32 has_UV2     : 1; // 4
+	uint32 has_UV3     : 1; // 8
+	uint32 has_UV4     : 1; // 10
+	uint32 has_normal  : 1; // 20
+	uint32 has_unused1 : 1; // 40
+	uint32 has_tangent : 1; // 80
+	uint32 has_unused2 : 1; // 100
+	uint32 has_unused3 : 1; // 200
+	uint32 has_unused4 : 1; // 400
+} vertex_struct_flags;
+
+typedef struct {
+	uint32 p_func1 <format=hex>;
+	uint32 p_func2 <format=hex>;
+	array_definition faces;
+	vertex bound_min;
+	vertex bound_max;
+	float radius;
+	vertex average;
+	color diffuse;
+	color ambient;
+	uint32 transparency;
+	char texture1[32];
+	char texture2[32];
+	char texture3[12];
+	char texture4[12];
+	array_definition vertex_indices_count;
+	array_definition vertex_indices_offset;
+	array_definition mesh_inverted_counts;
+	int32 always_minus1[2];
+	int32 always_zero_2;
+	ushort type;  // mesh type 3 = triangle list?
+	ushort type2; // always 10 if set
+	int32 garbage1[6];
+	int32 mdx_vertex_struct_size;
+	vertex_struct_flags flags;
+	int32 mdx_vertex_struct_offset_vertex;
+	int32 mdx_vertex_struct_offset_normal;
+	int32 mdx_vertex_struct_offset_unused1;
+	int32 mdx_vertex_struct_offset_UV1;
+	int32 mdx_vertex_struct_offset_UV2;
+	int32 mdx_vertex_struct_offset_UV3;
+	int32 mdx_vertex_struct_offset_UV4;
+	int32 mdx_vertex_struct_offset_tangent;
+	int32 mdx_vertex_struct_offset_unused2;
+	int32 mdx_vertex_struct_offset_unused3;
+	int32 mdx_vertex_struct_offset_unused4;
+	uint16 count_vertexes;
+	uint16 count_textures;
+	byte lightmapped;
+	byte rotatetexture;       // unused
+	byte background_geometry; // unused
+	byte shadow;
+	byte beaming;             // unused
+	byte render;
+	ushort garbage2[5];
+	uint32 mdx_offset_vertex_struct <format=hex>;
+	uint32 p_data <format=hex,read=ReadPointer>;
+} header_mesh <fgcolor=cWhite,bgcolor=cSilver>;
+
+typedef struct(node &n) {
+	if (n.mesh.faces.nr_used_entries > 0) {
+		GoToPointer(n.mesh.faces.p_array_start);
+		face faces[n.mesh.faces.nr_used_entries] <fgcolor=cYellow>;
+	}
+	if (n.mesh.vertex_indices_count.nr_used_entries > 0) {
+		GoToPointer(n.mesh.vertex_indices_count.p_array_start);
+		uint32 vertex_indices_count[n.mesh.vertex_indices_count.nr_used_entries] <fgcolor=cBlack>;
+	}
+	if (n.mesh.count_vertexes > 0) {
+		GoToPointer(n.mesh.p_data);
+		vertex v[n.mesh.count_vertexes] <fgcolor=cDkGreen>;
+	}
+	if (n.mesh.vertex_indices_offset.nr_used_entries > 0) {
+		GoToPointer(n.mesh.vertex_indices_offset.p_array_start);
+		uint32 vertex_indices_offset[n.mesh.vertex_indices_offset.nr_used_entries] <fgcolor=cDkRed, format=hex, read=ReadPointer>;
+	}
+	if (n.mesh.mesh_inverted_counts.nr_used_entries > 0) {
+		GoToPointer(n.mesh.mesh_inverted_counts.p_array_start);
+		uint32 mesh_inverted_count[n.mesh.mesh_inverted_counts.nr_used_entries] <fgcolor=cDkBlue>;
+	}
+ 	if (n.mesh.vertex_indices_count.nr_used_entries > 0) {
+		GoToPointer(vertex_indices_offset[0]);
+		ushort indices[vertex_indices_count[0]] <fgcolor=0x0080FF>;
+	}
+} data_mesh <bgcolor=cSilver>;
+
+//------------------------------------------------------
+// skin node
+
+typedef struct {
+	array_definition weights;
+	uint32 mdx_vertex_struct_offset_bone_weights;
+	uint32 mdx_vertex_struct_offset_bone_mapping_id;
+	uint32 p_bone_mapping <format=hex, read=ReadPointer>;
+	uint32 count_bone_mapping;
+	array_definition bone_quats;
+	array_definition bone_vertex;
+	array_definition bone_constants;
+	short bone_parts[17];
+	short spare;
+} header_skin <bgcolor=0x0080FF>;
+
+typedef struct(node &n) {
+	if (n.skin.count_bone_mapping > 0) {
+		GoToPointer(n.skin.p_bone_mapping);
+		float bone_mapping[n.skin.count_bone_mapping] <fgcolor=cAqua>;
+	}
+	if (n.skin.bone_quats.nr_used_entries > 0) {
+		GoToPointer(n.skin.bone_quats.p_array_start);
+		quaternion q[n.skin.bone_quats.nr_used_entries] <fgcolor=cDkGreen>;
+	}
+	if (n.skin.bone_vertex.nr_used_entries > 0) {
+		GoToPointer(n.skin.bone_vertex.p_array_start);
+		vertex v[n.skin.bone_vertex.nr_used_entries] <fgcolor=cBlack>;
+	}
+	if (n.skin.bone_constants.nr_used_entries > 0) {
+		GoToPointer(n.skin.bone_constants.p_array_start);
+		short constants[2*n.skin.bone_constants.nr_used_entries] <fgcolor=cLtGray>;
+	}
+} data_skin <bgcolor=0x0090FF>;
+
+//------------------------------------------------------
+// dangly node
+
+typedef struct {
+	array_definition constraints;
+	float displacement;
+	float tightness;
+	float period;
+	uint32 unknown;
+} header_dangly <fgcolor=cWhite,bgcolor=0x909000>;
+
+typedef struct(node &n) {
+	if (n.dangly.constraints.nr_used_entries > 0) {
+		GoToPointer(n.dangly.constraints.p_array_start);
+		float constraint[n.dangly.constraints.nr_used_entries] <fgcolor=cBlack>;
+		vertex vconstraint[n.dangly.constraints.nr_used_entries] <fgcolor=cBlack>;
+	}
+} data_dangly <bgcolor=0x909000>;
+
+//------------------------------------------------------
+// aabb node
+
+struct entry_aabb;
+
+typedef struct {
+	vertex bound_min;
+	vertex bound_max;
+	uint32 p_left_node <format=hex,read=ReadPointer>;
+	uint32 p_right_node <format=hex,read=ReadPointer>;
+	int32 part_number_leaf_face;
+	uint32 plane;
+	if (p_left_node > 0) {
+		GoToPointer(p_left_node);
+		entry_aabb left;
+	}
+	if (p_right_node > 0) {
+		GoToPointer(p_right_node);
+		entry_aabb right;
+	}
+} entry_aabb <fgcolor=cLtRed,bgcolor=cDkBlue>;
+
+typedef struct {
+	uint32 p_aabb <format=hex,read=ReadPointer>;
+} header_aabb <fgcolor=cWhite,bgcolor=cDkBlue>;
+
+typedef struct(node &n) {
+	GoToPointer(n.aabb.p_aabb);
+	entry_aabb root;
+} data_aabb <bgcolor=cDkBlue>;
+
+//------------------------------------------------------
+// saber node
+
+typedef struct {
+	uint32 flag1 : 1;
+	uint32 flag2 : 1;
+	uint32 flag3 : 1;
+	uint32 flag4 : 1;
+	uint32 flag5 : 1;
+	uint32 flag6 : 1;
+	uint32 flag7 : 1;
+	uint32 flag8 : 1;
+} saber_flags;
+
+typedef struct {
+	float f1;
+	rgba f2;
+	float f3;
+	float f4;
+	rgba f5;
+	float f6;
+	float f7;
+	float f8;
+	float f9;
+	float f10;
+	float f11;
+	float f12;
+} data1;
+
+typedef struct {
+	rgba f1;
+	float f2;
+	rgba f3;
+	rgba f4;
+	float f5;
+	rgba f6;
+	rgba f7;
+	float f8;
+	rgba f9;
+	rgba f10;
+	float f11;
+	rgba f12;
+} data2;
+
+typedef struct {
+	float f1;
+	float f2;
+	float f3;
+	float f4;
+	float f5;
+	float f6;
+	float f7;
+	float f8;
+} data3;
+
+typedef struct {
+	uint32 p_data1 <format=hex,read=ReadPointer>;
+	uint32 p_data3 <format=hex,read=ReadPointer>;
+	uint32 p_data2 <format=hex,read=ReadPointer>;
+	saber_flags flag1;
+	saber_flags flag2;
+} header_saber <fgcolor=cWhite,bgcolor=0xFF0040>;
+
+typedef struct(node &n) {
+	if (n.saber.p_data1 > 0) {
+		GoToPointer(n.saber.p_data1);
+		data1 d1[44] <fgcolor=cYellow>;
+	}
+	if (n.saber.p_data2 > 0) {
+		GoToPointer(n.saber.p_data2);
+		data2 d2[44] <fgcolor=cLtGreen>;
+	}
+	if (n.saber.p_data3 > 0) {
+		GoToPointer(n.saber.p_data3);
+		data3 d3[44] <fgcolor=cBlack>;
+	}
+} data_saber <bgcolor=0xFF0040>;
+
+//------------------------------------------------------
+// model node
+
+typedef struct {
+	header_node header;
+	if (header.content.has_light) {
+		header_light light;
+	}
+	if (header.content.has_emitter) {
+		header_emitter emitter;
+	}
+	if (header.content.has_reference) {
+		header_reference reference;
+	}
+	if (header.content.has_mesh) {
+		header_mesh mesh;
+	}
+	if (header.content.has_skin) {
+		header_skin skin;
+	}
+	if (header.content.has_dangly) {
+		header_dangly dangly;
+	}
+	if (header.content.has_aabb) {
+		header_aabb aabb;
+	}
+	if (header.content.has_unknown800) {
+		header_saber saber;
+	}
+	if (header.content.has_unknown800) {
+		data_saber saber_data(this);
+	}
+	if (header.content.has_aabb) {
+		data_aabb aabb_data(this);
+	}
+	if (header.content.has_dangly) {
+		if (dangly.constraints.nr_used_entries > 0) {
+			data_dangly dangly_data(this);
+		}
+	}
+	if (header.content.has_skin) {
+		if (skin.count_bone_mapping > 0 ||
+			skin.bone_quats.nr_used_entries > 0 ||
+			skin.bone_vertex.nr_used_entries > 0 ||
+			skin.bone_constants.nr_used_entries > 0) {
+
+			data_skin skin_data(this);
+		}
+	}
+	if (header.content.has_mesh) {
+		if (mesh.faces.nr_used_entries > 0 ||
+			mesh.count_vertexes > 0 ||
+			mesh.mesh_inverted_counts.nr_used_entries > 0 ||
+			mesh.vertex_indices_offset.nr_used_entries > 0 ||
+ 			mesh.vertex_indices_count.nr_used_entries > 0) {
+
+			data_mesh mesh_data(this);
+		}
+	}
+	if (header.content.has_light) {
+		if (light.flare_textures.nr_used_entries > 0 ||
+			light.flare_sizes.nr_used_entries > 0 ||
+			light.flare_positions.nr_used_entries > 0 ||
+			light.flare_color_shifts.nr_used_entries > 0) {
+
+			data_light light_data(this);
+		}
+	}
+
+	local int n;
+
+	for (n = 0; n < header.children.def.nr_used_entries; n++) {
+		GoToPointer(header.children.p_index[n]);
+		node children;
+	}
+	if (header.controllers_keys.nr_used_entries > 0) {
+		GoToPointer(header.controllers_keys.p_array_start);
+		for (n = 0; n < header.controllers_keys.nr_used_entries; n++) {
+			controller key(header.content);
+		}
+	}
+	if (header.controllers_data.nr_used_entries > 0) {
+		GoToPointer(header.controllers_data.p_array_start);
+		float controller_data[header.controllers_data.nr_used_entries] <bgcolor=cLtRed>;
+	}
+} node <read=ReadNode>;
+
+//------------------------------------------------------
+// animation structures
+
+typedef struct {
+	float length;
+	char name[32];
+} event <read=ReadEvent>;
+
+typedef struct(int nr_of_events) {
+	local int e;
+	for (e = 0; e < nr_of_events; e++) {
+		event ev;
+	}
+} event_array;
+
+typedef struct {
+	header_geometry geometry;
+	float length;
+	float transistion;
+	char name[32];
+	array_definition array_events;
+	uint32 unknown3;
+} header_animation;
+
+typedef struct {
+	header_animation header;
+
+	if (header.array_events.nr_used_entries > 0) {
+		GoToPointer(header.array_events.p_array_start);
+		event_array events(header.array_events.nr_used_entries);
+	}
+	GoToPointer(header.geometry.p_node_header);
+	node animation_node;
+} animation <read=ReadAnim, bgcolor=cDkAqua,fgcolor=cWhite>;
+
+//------------------------------------------------------
+// main definition
+
+LittleEndian();
+header_file hf;
+header_model hm;
+
+GoToPointer(hm.geometry.p_node_header);
+node root;
+
+local int a;
+for (a = 0; a < hm.animations.def.nr_used_entries; a++) {
+	GoToPointer(hm.animations.p_index[a]);
+	animation anim;
+}
+
+//------------------------------------------------------
+// read Methods
+
+string ReadStrings( strings &str ) {
+	return str.s;
+}
+
+string ReadVertex( vertex &v ) {
+	string s;
+	SPrintf(s, "x=%f,y=%f,z=%f", v.x, v.y, v.z);
+	return s;
+}
+
+string ReadColor( color &c ) {
+	local string s;
+	SPrintf(s, "r=%f,g=%f,b=%f", c.r, c.g, c.b);
+	return s;
+}
+
+string ReadRGBA( rgba &c ) {
+	local string s;
+	SPrintf(s, "r=%u,g=%u,b=%u,a=%u", c.r, c.g, c.b,c.a);
+	return s;
+}
+
+string ReadQuaternion( quaternion &q ) {
+	string s;
+	SPrintf(s, "%f,%f,%f,%f", q.w, q.x, q.y, q.z);
+	return s;
+}
+
+string ReadPointer(uint32 &p) {
+	uint32 v = 0;
+	if (p > 0) {
+		v = sizeof(header_file) + p;
+	}
+	string s;
+	SPrintf(s, "%Xh", v);
+	return s;
+}
+
+string ReadArrayDef( array_definition &a ) {
+	string s;
+	SPrintf(s, "%s(%i)", ReadPointer(a.p_array_start), a.nr_used_entries);
+	return s;
+}
+
+string ReadController( controller &key ) {
+	string s;
+	SPrintf(s, "%i", key.type);
+	return s;
+}
+
+string ReadNode( node &n ) {
+	string s = hm.names.str[n.header.node_name_index].s;
+	if (n.header.content.has_light) {
+		s+="+Ligh";
+	}
+	if (n.header.content.has_emitter) {
+		s+="+Emit";
+	}
+	if (n.header.content.has_camera) {
+		s+="+Came";
+	}
+	if (n.header.content.has_reference) {
+		s+="+Refs";
+	}
+	if (n.header.content.has_mesh) {
+		s+="+Mesh";
+	}
+	if (n.header.content.has_skin) {
+		s+="+Skin";
+	}
+	if (n.header.content.has_anim) {
+		s+="+Anim";
+	}
+	if (n.header.content.has_dangly) {
+		s+="+Dang";
+	}
+	if (n.header.content.has_aabb) {
+		s+="+AABB";
+	}
+	if (n.header.content.has_unknown400) {
+		s+="+U400";
+	}
+	if (n.header.content.has_unknown800) {
+		s+="+Sabr";
+	}
+	if (n.header.children.def.nr_used_entries > 0) {
+		local string child_count;
+		SPrintf(child_count, "(%d)", n.header.children.def.nr_used_entries);
+		s+=child_count;
+	}
+	return s;
+}
+
+string ReadEvent(event &e) {
+	local string s;
+	SPrintf(s, "%s(%f)", e.name, e.length);
+	return s;
+}
+
+string ReadAnim(animation &anim) {
+	return anim.header.geometry.model_name;
+}
